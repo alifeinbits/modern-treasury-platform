@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_NUMBER: 1  # Adjust this to match your project number
+  PROJECT_NUMBER: 4
+  GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
 jobs:
   create_issues:
@@ -14,8 +15,9 @@ jobs:
 
     - name: Create issues
       uses: actions/github-script@v6
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
       with:
-        github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
