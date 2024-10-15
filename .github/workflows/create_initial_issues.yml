@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_NUMBER: 4
   GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
 jobs:
@@ -13,12 +12,39 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Create issues
+    - name: List Projects and Create Issues
       uses: actions/github-script@v6
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
       with:
         script: |
+          // First, let's list all projects
+          const listProjectsQuery = `
+          query($owner:String!, $name:String!) {
+            repository(owner:$owner, name:$name) {
+              projectsV2(first: 20) {
+                nodes {
+                  id
+                  number
+                  title
+                }
+              }
+            }
+          }`;
+
+          const projectsData = await github.graphql(listProjectsQuery, {
+            owner: context.repo.owner,
+            name: context.repo.repo
+          });
+
+          console.log("Available projects:", JSON.stringify(projectsData.repository.projectsV2.nodes, null, 2));
+
+          // Select the first project (you can modify this logic if needed)
+          const project = projectsData.repository.projectsV2.nodes[0];
+          if (!project) {
+            throw new Error("No projects found in the repository");
+          }
+
+          console.log(`Using project: ${project.title} (Number: ${project.number})`);
+
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
             { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"], column: "To Do" },
@@ -77,17 +103,17 @@ jobs:
           const projectData = await github.graphql(projectQuery, {
             owner: context.repo.owner,
             name: context.repo.repo,
-            number: parseInt(process.env.PROJECT_NUMBER)
+            number: project.number
           });
 
-          const project = projectData.repository.projectV2;
-          if (!project) {
-            throw new Error(`Project number ${process.env.PROJECT_NUMBER} not found`);
+          const projectV2 = projectData.repository.projectV2;
+          if (!projectV2) {
+            throw new Error(`Project number ${project.number} not found`);
           }
 
-          console.log(`Found project: ${project.id}`);
+          console.log(`Found project: ${projectV2.id}`);
 
-          const statusField = project.fields.nodes.find(field => field.name === "Status");
+          const statusField = projectV2.fields.nodes.find(field => field.name === "Status");
           if (!statusField) {
             throw new Error("Status field not found in the project");
           }
@@ -125,7 +151,7 @@ jobs:
                   }
                 }
               `, {
-                projectId: project.id,
+                projectId: projectV2.id,
                 itemId: newIssue.data.node_id,
                 fieldId: statusField.id,
                 optionId: statusOption.id
