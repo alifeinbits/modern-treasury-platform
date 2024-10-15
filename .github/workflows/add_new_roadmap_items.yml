@@ -15,60 +15,24 @@ jobs:
         github-token: ${{secrets.PAT_TOKEN}}
         script: |
           const newIssues = [
-            { title: "Create a comprehensive README.md file", labels: ["documentation"], column: "To Do" },
-            { title: "Add API specifications for each microservice", labels: ["documentation"], column: "To Do" },
-            { title: "Set up CI/CD pipeline using GitHub Actions", labels: ["devops"], column: "To Do" },
-            { title: "Create issue templates for bug reports and feature requests", labels: ["documentation"], column: "To Do" },
-            { title: "Add CONTRIBUTING.md guidelines", labels: ["documentation"], column: "To Do" },
-            { title: "Choose and add an appropriate LICENSE file", labels: ["documentation"], column: "To Do" },
-            { title: "Create CODE_OF_CONDUCT.md", labels: ["documentation"], column: "To Do" },
-            { title: "Implement core functionality for account-service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement core functionality for payment-service", labels: ["enhancement"], column: "To Do" },
-            { title: "Develop comprehensive test suites for each service", labels: ["testing"], column: "To Do" },
-            { title: "Add Dockerfiles for each service", labels: ["devops"], column: "To Do" }
+            { title: "Create a comprehensive README.md file", labels: ["documentation"] },
+            { title: "Add API specifications for each microservice", labels: ["documentation"] },
+            { title: "Set up CI/CD pipeline using GitHub Actions", labels: ["devops"] },
+            { title: "Create issue templates for bug reports and feature requests", labels: ["documentation"] },
+            { title: "Add CONTRIBUTING.md guidelines", labels: ["documentation"] },
+            { title: "Choose and add an appropriate LICENSE file", labels: ["documentation"] },
+            { title: "Create CODE_OF_CONDUCT.md", labels: ["documentation"] },
+            { title: "Implement core functionality for account-service", labels: ["enhancement"] },
+            { title: "Implement core functionality for payment-service", labels: ["enhancement"] },
+            { title: "Develop comprehensive test suites for each service", labels: ["testing"] },
+            { title: "Add Dockerfiles for each service", labels: ["devops"] }
           ];
 
-          const projectQuery = `query($owner:String!, $name:String!) {
-            repository(owner:$owner, name:$name) {
-              projects(first:100) {
-                nodes {
-                  id
-                  name
-                  columns(first:100) {
-                    nodes {
-                      id
-                      name
-                    }
-                  }
-                }
-              }
-            }
-          }`;
-
-          const projectData = await github.graphql(projectQuery, {
-            owner: context.repo.owner,
-            name: context.repo.repo
-          });
-
-          const project = projectData.repository.projects.nodes.find(p => p.name === "Modern Treasury Platform Roadmap");
-          if (!project) {
-            throw new Error("Project not found");
-          }
-
           for (const issue of newIssues) {
-            const newIssue = await github.rest.issues.create({
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issue.title,
               labels: issue.labels
             });
-
-            const column = project.columns.nodes.find(c => c.name === issue.column);
-            if (column) {
-              await github.rest.projects.createCard({
-                column_id: column.id,
-                content_id: newIssue.data.id,
-                content_type: 'Issue'
-              });
-            }
           }
