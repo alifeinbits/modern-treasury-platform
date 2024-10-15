@@ -16,15 +16,21 @@ jobs:
       uses: actions/github-script@v6
       with:
         script: |
-          // First, let's list all projects
+          // First, let's list all classic projects
           const listProjectsQuery = `
           query($owner:String!, $name:String!) {
             repository(owner:$owner, name:$name) {
-              projectsV2(first: 20) {
+              projects(first: 20, states: [OPEN]) {
                 nodes {
                   id
                   number
-                  title
+                  name
+                  columns(first: 10) {
+                    nodes {
+                      id
+                      name
+                    }
+                  }
                 }
               }
             }
@@ -35,15 +41,15 @@ jobs:
             name: context.repo.repo
           });
 
-          console.log("Available projects:", JSON.stringify(projectsData.repository.projectsV2.nodes, null, 2));
+          console.log("Available projects:", JSON.stringify(projectsData.repository.projects.nodes, null, 2));
 
           // Select the first project (you can modify this logic if needed)
-          const project = projectsData.repository.projectsV2.nodes[0];
+          const project = projectsData.repository.projects.nodes[0];
           if (!project) {
-            throw new Error("No projects found in the repository");
+            throw new Error("No classic projects found in the repository");
           }
 
-          console.log(`Using project: ${project.title} (Number: ${project.number})`);
+          console.log(`Using project: ${project.name} (Number: ${project.number})`);
 
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
@@ -76,48 +82,6 @@ jobs:
             { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"], column: "Backlog" }
           ];
 
-          const projectQuery = `query($owner:String!, $name:String!, $number:Int!) {
-            repository(owner:$owner, name:$name) {
-              projectV2(number: $number) {
-                id
-                fields(first:20) {
-                  nodes {
-                    ... on ProjectV2Field {
-                      id
-                      name
-                    }
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      options {
-                        id
-                        name
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }`;
-
-          const projectData = await github.graphql(projectQuery, {
-            owner: context.repo.owner,
-            name: context.repo.repo,
-            number: project.number
-          });
-
-          const projectV2 = projectData.repository.projectV2;
-          if (!projectV2) {
-            throw new Error(`Project number ${project.number} not found`);
-          }
-
-          console.log(`Found project: ${projectV2.id}`);
-
-          const statusField = projectV2.fields.nodes.find(field => field.name === "Status");
-          if (!statusField) {
-            throw new Error("Status field not found in the project");
-          }
-
           for (const issue of issues) {
             const newIssue = await github.rest.issues.create({
               owner: context.repo.owner,
@@ -128,37 +92,16 @@ jobs:
 
             console.log(`Created issue: ${newIssue.data.title}`);
 
-            const statusOption = statusField.options.find(option => option.name === issue.status);
-            if (statusOption) {
-              await github.graphql(`
-                mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!) {
-                  addProjectV2ItemById(input: {projectId: $projectId, contentId: $itemId}) {
-                    item {
-                      id
-                    }
-                  }
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $projectId
-                    itemId: $itemId
-                    fieldId: $fieldId
-                    value: { 
-                      singleSelectOptionId: $optionId
-                    }
-                  }) {
-                    projectV2Item {
-                      id
-                    }
-                  }
-                }
-              `, {
-                projectId: projectV2.id,
-                itemId: newIssue.data.node_id,
-                fieldId: statusField.id,
-                optionId: statusOption.id
+            const column = project.columns.nodes.find(col => col.name === issue.column);
+            if (column) {
+              await github.rest.projects.createCard({
+                column_id: column.id,
+                content_id: newIssue.data.id,
+                content_type: 'Issue'
               });
 
-              console.log(`Added issue to project and set status to ${issue.status}`);
+              console.log(`Added issue to project column: ${issue.column}`);
             } else {
-              console.log(`Status option "${issue.status}" not found for issue "${issue.title}"`);
+              console.log(`Column "${issue.column}" not found for issue "${issue.title}"`);
             }
           }
