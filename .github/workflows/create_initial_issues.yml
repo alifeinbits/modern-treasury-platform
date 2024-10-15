@@ -3,65 +3,20 @@ name: Create Initial Issues
 on:
   workflow_dispatch:
 
-permissions:
-  issues: write        # Required to create and manage issues
-  contents: read       # Required to read repository content
-
 jobs:
   create_issues:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.PAT_TOKEN }}     # Personal Access Token stored as a secret in your repository
-      REPOSITORY: ${{ github.repository }}   # Repository name (e.g., 'user/repo')
-      PROJECT_NUMBER: 4                      # Replace with your project's number (you can find this in the project URL)
-
     steps:
-      - name: Create issues in project
-        run: |
-          # GitHub API GraphQL query to get classic project by number
-          query='
-          {
-            repository(owner: "${{ github.repository_owner }}", name: "${REPOSITORY##*/}") {
-              projects(first: 100) {
-                nodes {
-                  number
-                  name
-                  id
-                  columns(first: 100) {
-                    nodes {
-                      id
-                      name
-                    }
-                  }
-                }
-              }
-            }
-          }
-          '
+    - uses: actions/checkout@v2
 
-          # Use curl to make the GraphQL API request
-          response=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-            -d "{\"query\": \"$query\"}" https://api.github.com/graphql)
-
-          echo "Response: $response"
-
-          # Extract the project and column IDs from the response
-          project=$(echo "$response" | jq -r ".data.repository.projects.nodes[] | select(.number == $PROJECT_NUMBER)")
-
-          if [ -z "$project" ]; then
-            echo "Error: Project not found!"
-            exit 1
-          fi
-
-          project_id=$(echo "$project" | jq -r '.id')
-          columns=$(echo "$project" | jq -r '.columns.nodes[] | {name, id}')
-
-          echo "Project ID: $project_id"
-          echo "Columns: $columns"
-
-          # Define issues to create
-          issues='[
-          { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
+    - name: Create issues
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{secrets.GH_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const issues = [
+            { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
             { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"], column: "To Do" },
             { title: "Implement centralized configuration management with Spring Cloud Config", labels: ["enhancement"], column: "To Do" },
             { title: "Implement circuit breaker pattern using Resilience4j", labels: ["enhancement"], column: "To Do" },
@@ -89,48 +44,49 @@ jobs:
             { title: "Create a product roadmap for the next 12 months", labels: ["business"], column: "Backlog" },
             { title: "Identify potential strategic partnerships", labels: ["business"], column: "Backlog" },
             { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"], column: "Backlog" }
-          ]'
+          ];
 
-          # Loop over each issue and create them, then move to the correct column
-          for row in $(echo "${issues}" | jq -r '.[] | @base64'); do
-            _jq() {
-              echo ${row} | base64 --decode | jq -r ${1}
+          const projectQuery = `query($owner:String!, $name:String!) {
+            repository(owner:$owner, name:$name) {
+              projects(first:100) {
+                nodes {
+                  id
+                  name
+                  columns(first:100) {
+                    nodes {
+                      id
+                      name
+                    }
+                  }
+                }
+              }
             }
+          }`;
 
-            title=$(_jq '.title')
-            labels=$(_jq '.labels')
-            column=$(_jq '.column')
+          const projectData = await github.graphql(projectQuery, {
+            owner: context.repo.owner,
+            name: context.repo.repo
+          });
 
-            # Create the issue
-            issue_response=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/${REPOSITORY}/issues \
-              -d "{\"title\":\"$title\", \"labels\":$labels}")
+          const project = projectData.repository.projects.nodes.find(p => p.name === "Modern Treasury Platform Roadmap");
+          if (!project) {
+            throw new Error("Project not found");
+          }
 
-            issue_id=$(echo "$issue_response" | jq -r '.id')
+          for (const issue of issues) {
+            const newIssue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issue.title,
+              labels: issue.labels
+            });
 
-            if [ "$issue_id" == "null" ]; then
-              echo "Error: Failed to create issue"
-              exit 1
-            fi
-
-            echo "Created issue: $title with ID: $issue_id"
-
-            # Move the issue to the correct column
-            column_id=$(echo "$columns" | jq -r "select(.name == \"$column\") | .id")
-
-            if [ -z "$column_id" ]; then
-              echo "Error: Column '$column' not found!"
-              exit 1
-            fi
-
-            card_response=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/projects/columns/$column_id/cards \
-              -d "{\"content_id\": \"$issue_id\", \"content_type\": \"Issue\"}")
-
-            if echo "$card_response" | jq -e 'has("id")' >/dev/null; then
-              echo "Moved issue '$title' to column '$column'"
-            else
-              echo "Error: Failed to move issue '$title' to column '$column'"
-              exit 1
-            fi
-          done
+            const column = project.columns.nodes.find(c => c.name === issue.column);
+            if (column) {
+              await github.rest.projects.createCard({
+                column_id: column.id,
+                content_id: newIssue.data.id,
+                content_type: 'Issue'
+              });
+            }
+          }
