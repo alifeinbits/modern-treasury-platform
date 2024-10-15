@@ -6,6 +6,10 @@ on:
 jobs:
   create_issues:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      project: write
+      contents: read
     steps:
     - uses: actions/checkout@v2
 
@@ -14,7 +18,6 @@ jobs:
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          const fs = require('fs');
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
             { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"], column: "To Do" },
@@ -46,16 +49,51 @@ jobs:
             { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"], column: "Backlog" }
           ];
 
-          const projectQuery = `query($owner:String!, $name:String!) {
+          // Query to get all projects
+          const projectsQuery = `query($owner:String!, $name:String!) {
             repository(owner:$owner, name:$name) {
-              projects(first:100) {
+              projectsV2(first: 20) {
                 nodes {
                   id
-                  name
-                  columns(first:100) {
-                    nodes {
+                  title
+                  number
+                }
+              }
+            }
+          }`;
+
+          const projectsData = await github.graphql(projectsQuery, {
+            owner: context.repo.owner,
+            name: context.repo.repo
+          });
+
+          console.log("Available projects:", JSON.stringify(projectsData.repository.projectsV2.nodes, null, 2));
+
+          if (projectsData.repository.projectsV2.nodes.length === 0) {
+            throw new Error("No projects found in the repository");
+          }
+
+          // Use the first project
+          const project = projectsData.repository.projectsV2.nodes[0];
+          console.log(`Using project: ${project.title} (${project.number})`);
+
+          // Query to get project fields
+          const fieldsQuery = `query($owner:String!, $number:Int!) {
+            repository(owner:$owner, name:"${context.repo.repo}") {
+              projectV2(number: $number) {
+                fields(first:20) {
+                  nodes {
+                    ... on ProjectV2Field {
                       id
                       name
+                    }
+                    ... on ProjectV2SingleSelectField {
+                      id
+                      name
+                      options {
+                        id
+                        name
+                      }
                     }
                   }
                 }
@@ -63,15 +101,18 @@ jobs:
             }
           }`;
 
-          const projectData = await github.graphql(projectQuery, {
+          const fieldsData = await github.graphql(fieldsQuery, {
             owner: context.repo.owner,
-            name: context.repo.repo
+            number: project.number
           });
 
-          const project = projectData.repository.projects.nodes.find(p => p.name === "Modern Treasury Platform Roadmap");
-          if (!project) {
-            throw new Error("Project not found");
+          const statusField = fieldsData.repository.projectV2.fields.nodes.find(field => field.name === "Status");
+          
+          if (!statusField) {
+            throw new Error("Status field not found in the project");
           }
+
+          console.log("Status field options:", JSON.stringify(statusField.options, null, 2));
 
           for (const issue of issues) {
             const newIssue = await github.rest.issues.create({
@@ -81,13 +122,35 @@ jobs:
               labels: issue.labels
             });
 
-            const column = project.columns.nodes.find(c => c.name === issue.column);
-            if (column) {
-              await github.rest.projects.createCard({
-                column_id: column.id,
-                content_id: newIssue.data.id,
-                content_type: 'Issue'
+            const statusOption = statusField.options.find(option => option.name === issue.status);
+            if (statusOption) {
+              await github.graphql(`
+                mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!) {
+                  addProjectV2ItemById(input: {projectId: $projectId, contentId: $itemId}) {
+                    item {
+                      id
+                    }
+                  }
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { 
+                      singleSelectOptionId: $optionId
+                    }
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                projectId: project.id,
+                itemId: newIssue.data.node_id,
+                fieldId: statusField.id,
+                optionId: statusOption.id
               });
+            } else {
+              console.log(`Status option "${issue.status}" not found for issue "${issue.title}"`);
             }
           }
-
