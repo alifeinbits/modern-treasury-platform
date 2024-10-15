@@ -12,12 +12,12 @@ jobs:
     - name: Get project data
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        ORGANIZATION: ${{ github.repository_owner }}
-        PROJECT_NUMBER: 1
+        USER: ${{ github.repository_owner }}
+        PROJECT_NUMBER: 4
       run: |
         gh api graphql -f query='
-          query($org: String!, $number: Int!) {
-            organization(login: $org){
+          query($user: String!, $number: Int!) {
+            user(login: $user){
               projectV2(number: $number) {
                 id
                 fields(first:20) {
@@ -38,17 +38,17 @@ jobs:
                 }
               }
             }
-          }' -f org=$ORGANIZATION -F number=$PROJECT_NUMBER > project_data.json
+          }' -f user=$USER -F number=$PROJECT_NUMBER > project_data.json
 
     - name: Process open issues
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         REPO: ${{ github.repository }}
       run: |
-        PROJECT_ID=$(jq '.data.organization.projectV2.id' project_data.json -r)
-        STATUS_FIELD_ID=$(jq '.data.organization.projectV2.fields.nodes[] | select(.name== "Status") | .id' project_data.json -r)
-        TODO_OPTION_ID=$(jq '.data.organization.projectV2.fields.nodes[] | select(.name== "Status") | .options[] | select(.name=="Todo") | .id' project_data.json -r)
-        LABELS_FIELD_ID=$(jq '.data.organization.projectV2.fields.nodes[] | select(.name== "Labels") | .id' project_data.json -r)
+        PROJECT_ID=$(jq '.data.user.projectV2.id' project_data.json -r)
+        STATUS_FIELD_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Status") | .id' project_data.json -r)
+        TODO_OPTION_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Status") | .options[] | select(.name=="Todo") | .id' project_data.json -r)
+        LABELS_FIELD_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Labels") | .id' project_data.json -r)
 
         # Fetch all open issues
         gh issue list --repo $REPO --state open --json number,title,labels,url,id > open_issues.json
