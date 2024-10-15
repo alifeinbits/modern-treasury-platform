@@ -11,7 +11,7 @@ jobs:
   create_issues:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.PAT_TOKEN }}     # Personal Access Token stored as a secret in your repository
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}     # Personal Access Token stored as a secret in your repository
       REPOSITORY: ${{ github.repository }}   # Repository name (e.g., 'user/repo')
       PROJECT_NUMBER: 4                      # Replace with your project's number (you can find this in the project URL)
 
