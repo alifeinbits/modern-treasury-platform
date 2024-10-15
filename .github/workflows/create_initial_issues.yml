@@ -1,0 +1,93 @@
+name: Create Initial Issues
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create_issues:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Create issues
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const fs = require('fs');
+          const issues = [
+            { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
+            { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement centralized configuration management with Spring Cloud Config", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement circuit breaker pattern using Resilience4j", labels: ["enhancement"], column: "To Do" },
+            { title: "Set up distributed tracing with Spring Cloud Sleuth and Zipkin", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement event-driven architecture using Apache Kafka", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement OAuth2 and JWT for authentication and authorization", labels: ["enhancement"], column: "To Do" },
+            { title: "Ensure each service has its own database", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement CRUD operations for Account Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement payment processing logic for Payment Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement double-entry bookkeeping system for Ledger Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement KYC checks for Counterparty Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Set up secure document storage for Document Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement invoice generation and management for Invoice Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement real-time exchange rate fetching for Foreign Exchange Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Set up event logging and tracking for Event Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement real-time balance tracking for Balance Monitoring Service", labels: ["enhancement"], column: "To Do" },
+            { title: "Set up CI/CD pipelines for automated testing and deployment", labels: ["enhancement"], column: "To Do" },
+            { title: "Develop comprehensive test suites for each service", labels: ["enhancement"], column: "To Do" },
+            { title: "Implement monitoring and alerting system", labels: ["enhancement"], column: "To Do" },
+            { title: "Develop a go-to-market strategy", labels: ["business"], column: "Backlog" },
+            { title: "Create a pitch deck for potential investors", labels: ["business"], column: "Backlog" },
+            { title: "Conduct market research and competitor analysis", labels: ["business"], column: "Backlog" },
+            { title: "Define pricing model and revenue streams", labels: ["business"], column: "Backlog" },
+            { title: "Develop a customer acquisition strategy", labels: ["business"], column: "Backlog" },
+            { title: "Create a product roadmap for the next 12 months", labels: ["business"], column: "Backlog" },
+            { title: "Identify potential strategic partnerships", labels: ["business"], column: "Backlog" },
+            { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"], column: "Backlog" }
+          ];
+
+          const projectQuery = `query($owner:String!, $name:String!) {
+            repository(owner:$owner, name:$name) {
+              projects(first:100) {
+                nodes {
+                  id
+                  name
+                  columns(first:100) {
+                    nodes {
+                      id
+                      name
+                    }
+                  }
+                }
+              }
+            }
+          }`;
+
+          const projectData = await github.graphql(projectQuery, {
+            owner: context.repo.owner,
+            name: context.repo.repo
+          });
+
+          const project = projectData.repository.projects.nodes.find(p => p.name === "Modern Treasury Platform Roadmap");
+          if (!project) {
+            throw new Error("Project not found");
+          }
+
+          for (const issue of issues) {
+            const newIssue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issue.title,
+              labels: issue.labels
+            });
+
+            const column = project.columns.nodes.find(c => c.name === issue.column);
+            if (column) {
+              await github.rest.projects.createCard({
+                column_id: column.id,
+                content_id: newIssue.data.id,
+                content_type: 'Issue'
+              });
+            }
+          }
+
