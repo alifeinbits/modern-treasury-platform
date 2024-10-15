@@ -39,6 +39,8 @@ jobs:
               }
             }
           }' -f user=$USER -F number=$PROJECT_NUMBER > project_data.json
+        
+        cat project_data.json
 
     - name: Process open issues
       env:
@@ -46,9 +48,19 @@ jobs:
         REPO: ${{ github.repository }}
       run: |
         PROJECT_ID=$(jq '.data.user.projectV2.id' project_data.json -r)
+        echo "Project ID: $PROJECT_ID"
+        
         STATUS_FIELD_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Status") | .id' project_data.json -r)
-        TODO_OPTION_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Status") | .options[] | select(.name=="Todo") | .id' project_data.json -r)
+        echo "Status Field ID: $STATUS_FIELD_ID"
+        
+        echo "Available Status options:"
+        jq '.data.user.projectV2.fields.nodes[] | select(.name== "Status") | .options[]' project_data.json
+        
+        TODO_OPTION_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Status") | .options[] | select(.name=="To do") | .id' project_data.json -r)
+        echo "To do Status Option ID: $TODO_OPTION_ID"
+        
         LABELS_FIELD_ID=$(jq '.data.user.projectV2.fields.nodes[] | select(.name== "Labels") | .id' project_data.json -r)
+        echo "Labels Field ID: $LABELS_FIELD_ID"
 
         # Fetch all open issues
         gh issue list --repo $REPO --state open --json number,title,labels,url,id > open_issues.json
@@ -70,7 +82,7 @@ jobs:
             }' -f project=$PROJECT_ID -f issue=$ISSUE_ID --jq '.data.addProjectV2ItemById.item.id')
 
           if [ -n "$ITEM_ID" ]; then
-            # Set status to Todo
+            # Set status to "To do"
             gh api graphql -f query='
               mutation (
                 $project: ID!
