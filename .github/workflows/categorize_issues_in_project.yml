@@ -1,18 +1,19 @@
 name: Categorize Issues in Project
 
 on:
-  issues:
-    types: [opened, reopened]
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  categorize_issue:
+  categorize_issues:
     runs-on: ubuntu-latest
     steps:
     - name: Get project data
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         ORGANIZATION: ${{ github.repository_owner }}
-        PROJECT_NUMBER: 4
+        PROJECT_NUMBER: 1
       run: |
         gh api graphql -f query='
           query($org: String!, $number: Int!) {
@@ -39,78 +40,82 @@ jobs:
             }
           }' -f org=$ORGANIZATION -F number=$PROJECT_NUMBER > project_data.json
 
-    - name: Add issue to project
+    - name: Process open issues
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        ISSUE_ID: ${{ github.event.issue.node_id }}
+        REPO: ${{ github.repository }}
       run: |
         PROJECT_ID=$(jq '.data.organization.projectV2.id' project_data.json -r)
-        
-        gh api graphql -f query='
-          mutation($project:ID!, $issue:ID!) {
-            addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
-              item {
-                id
-              }
-            }
-          }' -f project=$PROJECT_ID -f issue=$ISSUE_ID > issue_data.json
-        
-        ITEM_ID=$(jq '.data.addProjectV2ItemById.item.id' issue_data.json -r)
-        
         STATUS_FIELD_ID=$(jq '.data.organization.projectV2.fields.nodes[] | select(.name== "Status") | .id' project_data.json -r)
         TODO_OPTION_ID=$(jq '.data.organization.projectV2.fields.nodes[] | select(.name== "Status") | .options[] | select(.name=="Todo") | .id' project_data.json -r)
-        
-        gh api graphql -f query='
-          mutation (
-            $project: ID!
-            $item: ID!
-            $status_field: ID!
-            $status_value: String!
-          ) {
-            updateProjectV2ItemFieldValue(input: {
-              projectId: $project
-              itemId: $item
-              fieldId: $status_field
-              value: { 
-                singleSelectOptionId: $status_value
-              }
-            }) {
-              projectV2Item {
-                id
-              }
-            }
-          }' -f project=$PROJECT_ID -f item=$ITEM_ID -f status_field=$STATUS_FIELD_ID -f status_value=$TODO_OPTION_ID
-
-    - name: Set labels based on issue labels
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        ISSUE_ID: ${{ github.event.issue.node_id }}
-      run: |
-        PROJECT_ID=$(jq '.data.organization.projectV2.id' project_data.json -r)
-        ITEM_ID=$(jq '.data.addProjectV2ItemById.item.id' issue_data.json -r)
-        
         LABELS_FIELD_ID=$(jq '.data.organization.projectV2.fields.nodes[] | select(.name== "Labels") | .id' project_data.json -r)
-        
-        LABELS=$(jq -r '.labels[].name' <<< '${{ toJson(github.event.issue.labels) }}' | jq -R -s -c 'split("\n")[:-1]')
-        
-        gh api graphql -f query='
-          mutation (
-            $project: ID!
-            $item: ID!
-            $labels_field: ID!
-            $labels: [String!]!
-          ) {
-            updateProjectV2ItemFieldValue(input: {
-              projectId: $project
-              itemId: $item
-              fieldId: $labels_field
-              value: { 
-                multiSelectOptionIds: $labels
-              }
-            }) {
-              projectV2Item {
-                id
-              }
-            }
-          }' -f project=$PROJECT_ID -f item=$ITEM_ID -f labels_field=$LABELS_FIELD_ID -f labels="$LABELS"
 
+        # Fetch all open issues
+        gh issue list --repo $REPO --state open --json number,title,labels,url,id > open_issues.json
+
+        # Process each issue
+        jq -c '.[]' open_issues.json | while read -r issue; do
+          ISSUE_ID=$(echo $issue | jq -r '.id')
+          ISSUE_NUMBER=$(echo $issue | jq -r '.number')
+          ISSUE_LABELS=$(echo $issue | jq -r '.labels[].name' | jq -R -s -c 'split("\n")[:-1]')
+
+          # Add issue to project
+          ITEM_ID=$(gh api graphql -f query='
+            mutation($project:ID!, $issue:ID!) {
+              addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
+                item {
+                  id
+                }
+              }
+            }' -f project=$PROJECT_ID -f issue=$ISSUE_ID --jq '.data.addProjectV2ItemById.item.id')
+
+          if [ -n "$ITEM_ID" ]; then
+            # Set status to Todo
+            gh api graphql -f query='
+              mutation (
+                $project: ID!
+                $item: ID!
+                $status_field: ID!
+                $status_value: String!
+              ) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $project
+                  itemId: $item
+                  fieldId: $status_field
+                  value: { 
+                    singleSelectOptionId: $status_value
+                  }
+                }) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }' -f project=$PROJECT_ID -f item=$ITEM_ID -f status_field=$STATUS_FIELD_ID -f status_value=$TODO_OPTION_ID
+
+            # Set labels
+            gh api graphql -f query='
+              mutation (
+                $project: ID!
+                $item: ID!
+                $labels_field: ID!
+                $labels: [String!]!
+              ) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $project
+                  itemId: $item
+                  fieldId: $labels_field
+                  value: { 
+                    multiSelectOptionIds: $labels
+                  }
+                }) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }' -f project=$PROJECT_ID -f item=$ITEM_ID -f labels_field=$LABELS_FIELD_ID -f labels="$ISSUE_LABELS"
+
+            echo "Processed issue #$ISSUE_NUMBER"
+          else
+            echo "Issue #$ISSUE_NUMBER is already in the project"
+          fi
+        done
