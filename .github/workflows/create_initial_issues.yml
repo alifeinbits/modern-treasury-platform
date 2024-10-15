@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  PROJECT_NUMBER: 4
+  PROJECT_NUMBER: 1  # Adjust this to match your project number
 
 jobs:
   create_issues:
@@ -16,7 +15,7 @@ jobs:
     - name: Create issues
       uses: actions/github-script@v6
       with:
-        github-token: ${{ env.GH_TOKEN }}
+        github-token: ${{ secrets.PROJECT_PAT }}
         script: |
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
@@ -76,7 +75,7 @@ jobs:
           const projectData = await github.graphql(projectQuery, {
             owner: context.repo.owner,
             name: context.repo.repo,
-            number: process.env.PROJECT_NUMBER
+            number: parseInt(process.env.PROJECT_NUMBER)
           });
 
           const project = projectData.repository.projectV2;
