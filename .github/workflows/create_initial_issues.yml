@@ -15,7 +15,7 @@ jobs:
     - name: Create issues
       uses: actions/github-script@v6
       with:
-        github-token: ${{ secrets.PROJECT_PAT }}
+        github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
