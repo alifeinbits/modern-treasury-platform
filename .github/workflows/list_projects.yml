@@ -9,7 +9,6 @@ jobs:
     permissions:
       contents: read
       issues: read
-      project: read
     steps:
     - name: List Projects
       uses: actions/github-script@v6
@@ -79,4 +78,3 @@ jobs:
           } catch (error) {
             console.log("Error querying organization projects:", error.message);
           }
-
