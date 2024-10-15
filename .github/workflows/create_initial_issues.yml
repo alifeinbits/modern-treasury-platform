@@ -12,74 +12,39 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: List Projects and Create Issues
+    - name: Create Issues
       uses: actions/github-script@v6
       with:
         script: |
-          // First, let's list all classic projects
-          const listProjectsQuery = `
-          query($owner:String!, $name:String!) {
-            repository(owner:$owner, name:$name) {
-              projects(first: 20, states: [OPEN]) {
-                nodes {
-                  id
-                  number
-                  name
-                  columns(first: 10) {
-                    nodes {
-                      id
-                      name
-                    }
-                  }
-                }
-              }
-            }
-          }`;
-
-          const projectsData = await github.graphql(listProjectsQuery, {
-            owner: context.repo.owner,
-            name: context.repo.repo
-          });
-
-          console.log("Available projects:", JSON.stringify(projectsData.repository.projects.nodes, null, 2));
-
-          // Select the first project (you can modify this logic if needed)
-          const project = projectsData.repository.projects.nodes[0];
-          if (!project) {
-            throw new Error("No classic projects found in the repository");
-          }
-
-          console.log(`Using project: ${project.name} (Number: ${project.number})`);
-
           const issues = [
-            { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
-            { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement centralized configuration management with Spring Cloud Config", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement circuit breaker pattern using Resilience4j", labels: ["enhancement"], column: "To Do" },
-            { title: "Set up distributed tracing with Spring Cloud Sleuth and Zipkin", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement event-driven architecture using Apache Kafka", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement OAuth2 and JWT for authentication and authorization", labels: ["enhancement"], column: "To Do" },
-            { title: "Ensure each service has its own database", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement CRUD operations for Account Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement payment processing logic for Payment Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement double-entry bookkeeping system for Ledger Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement KYC checks for Counterparty Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Set up secure document storage for Document Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement invoice generation and management for Invoice Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement real-time exchange rate fetching for Foreign Exchange Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Set up event logging and tracking for Event Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement real-time balance tracking for Balance Monitoring Service", labels: ["enhancement"], column: "To Do" },
-            { title: "Set up CI/CD pipelines for automated testing and deployment", labels: ["enhancement"], column: "To Do" },
-            { title: "Develop comprehensive test suites for each service", labels: ["enhancement"], column: "To Do" },
-            { title: "Implement monitoring and alerting system", labels: ["enhancement"], column: "To Do" },
-            { title: "Develop a go-to-market strategy", labels: ["business"], column: "Backlog" },
-            { title: "Create a pitch deck for potential investors", labels: ["business"], column: "Backlog" },
-            { title: "Conduct market research and competitor analysis", labels: ["business"], column: "Backlog" },
-            { title: "Define pricing model and revenue streams", labels: ["business"], column: "Backlog" },
-            { title: "Develop a customer acquisition strategy", labels: ["business"], column: "Backlog" },
-            { title: "Create a product roadmap for the next 12 months", labels: ["business"], column: "Backlog" },
-            { title: "Identify potential strategic partnerships", labels: ["business"], column: "Backlog" },
-            { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"], column: "Backlog" }
+            { title: "Implement service discovery with Eureka", labels: ["enhancement"] },
+            { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"] },
+            { title: "Implement centralized configuration management with Spring Cloud Config", labels: ["enhancement"] },
+            { title: "Implement circuit breaker pattern using Resilience4j", labels: ["enhancement"] },
+            { title: "Set up distributed tracing with Spring Cloud Sleuth and Zipkin", labels: ["enhancement"] },
+            { title: "Implement event-driven architecture using Apache Kafka", labels: ["enhancement"] },
+            { title: "Implement OAuth2 and JWT for authentication and authorization", labels: ["enhancement"] },
+            { title: "Ensure each service has its own database", labels: ["enhancement"] },
+            { title: "Implement CRUD operations for Account Service", labels: ["enhancement"] },
+            { title: "Implement payment processing logic for Payment Service", labels: ["enhancement"] },
+            { title: "Implement double-entry bookkeeping system for Ledger Service", labels: ["enhancement"] },
+            { title: "Implement KYC checks for Counterparty Service", labels: ["enhancement"] },
+            { title: "Set up secure document storage for Document Service", labels: ["enhancement"] },
+            { title: "Implement invoice generation and management for Invoice Service", labels: ["enhancement"] },
+            { title: "Implement real-time exchange rate fetching for Foreign Exchange Service", labels: ["enhancement"] },
+            { title: "Set up event logging and tracking for Event Service", labels: ["enhancement"] },
+            { title: "Implement real-time balance tracking for Balance Monitoring Service", labels: ["enhancement"] },
+            { title: "Set up CI/CD pipelines for automated testing and deployment", labels: ["enhancement"] },
+            { title: "Develop comprehensive test suites for each service", labels: ["enhancement"] },
+            { title: "Implement monitoring and alerting system", labels: ["enhancement"] },
+            { title: "Develop a go-to-market strategy", labels: ["business"] },
+            { title: "Create a pitch deck for potential investors", labels: ["business"] },
+            { title: "Conduct market research and competitor analysis", labels: ["business"] },
+            { title: "Define pricing model and revenue streams", labels: ["business"] },
+            { title: "Develop a customer acquisition strategy", labels: ["business"] },
+            { title: "Create a product roadmap for the next 12 months", labels: ["business"] },
+            { title: "Identify potential strategic partnerships", labels: ["business"] },
+            { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"] }
           ];
 
           for (const issue of issues) {
@@ -91,17 +56,4 @@ jobs:
             });
 
             console.log(`Created issue: ${newIssue.data.title}`);
-
-            const column = project.columns.nodes.find(col => col.name === issue.column);
-            if (column) {
-              await github.rest.projects.createCard({
-                column_id: column.id,
-                content_id: newIssue.data.id,
-                content_type: 'Issue'
-              });
-
-              console.log(`Added issue to project column: ${issue.column}`);
-            } else {
-              console.log(`Column "${issue.column}" not found for issue "${issue.title}"`);
-            }
           }
