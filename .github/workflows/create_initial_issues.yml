@@ -3,6 +3,10 @@ name: Create Initial Issues
 on:
   workflow_dispatch:
 
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  PROJECT_NUMBER: 4
+
 jobs:
   create_issues:
     runs-on: ubuntu-latest
@@ -12,9 +16,8 @@ jobs:
     - name: Create issues
       uses: actions/github-script@v6
       with:
-        github-token: ${{secrets.GH_TOKEN }}
+        github-token: ${{ env.GH_TOKEN }}
         script: |
-          const fs = require('fs');
           const issues = [
             { title: "Implement service discovery with Eureka", labels: ["enhancement"], column: "In Progress" },
             { title: "Set up API Gateway using Spring Cloud Gateway", labels: ["enhancement"], column: "To Do" },
@@ -46,16 +49,23 @@ jobs:
             { title: "Develop a scalability plan for infrastructure and operations", labels: ["business"], column: "Backlog" }
           ];
 
-          const projectQuery = `query($owner:String!, $name:String!) {
+          const projectQuery = `query($owner:String!, $name:String!, $number:Int!) {
             repository(owner:$owner, name:$name) {
-              projects(first:100) {
-                nodes {
-                  id
-                  name
-                  columns(first:100) {
-                    nodes {
+              projectV2(number: $number) {
+                id
+                fields(first:20) {
+                  nodes {
+                    ... on ProjectV2Field {
                       id
                       name
+                    }
+                    ... on ProjectV2SingleSelectField {
+                      id
+                      name
+                      options {
+                        id
+                        name
+                      }
                     }
                   }
                 }
@@ -65,12 +75,20 @@ jobs:
 
           const projectData = await github.graphql(projectQuery, {
             owner: context.repo.owner,
-            name: context.repo.repo
+            name: context.repo.repo,
+            number: process.env.PROJECT_NUMBER
           });
 
-          const project = projectData.repository.projects.nodes.find(p => p.name === "Modern Treasury Platform Roadmap");
+          const project = projectData.repository.projectV2;
           if (!project) {
-            throw new Error("Project not found");
+            throw new Error(`Project number ${process.env.PROJECT_NUMBER} not found`);
+          }
+
+          console.log(`Found project: ${project.id}`);
+
+          const statusField = project.fields.nodes.find(field => field.name === "Status");
+          if (!statusField) {
+            throw new Error("Status field not found in the project");
           }
 
           for (const issue of issues) {
@@ -81,12 +99,39 @@ jobs:
               labels: issue.labels
             });
 
-            const column = project.columns.nodes.find(c => c.name === issue.column);
-            if (column) {
-              await github.rest.projects.createCard({
-                column_id: column.id,
-                content_id: newIssue.data.id,
-                content_type: 'Issue'
+            console.log(`Created issue: ${newIssue.data.title}`);
+
+            const statusOption = statusField.options.find(option => option.name === issue.status);
+            if (statusOption) {
+              await github.graphql(`
+                mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!) {
+                  addProjectV2ItemById(input: {projectId: $projectId, contentId: $itemId}) {
+                    item {
+                      id
+                    }
+                  }
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { 
+                      singleSelectOptionId: $optionId
+                    }
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                projectId: project.id,
+                itemId: newIssue.data.node_id,
+                fieldId: statusField.id,
+                optionId: statusOption.id
               });
+
+              console.log(`Added issue to project and set status to ${issue.status}`);
+            } else {
+              console.log(`Status option "${issue.status}" not found for issue "${issue.title}"`);
             }
           }
