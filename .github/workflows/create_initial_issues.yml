@@ -17,7 +17,7 @@ jobs:
       - name: Create issues
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
             const projectQuery = `
               query($owner:String!, $name:String!) {
