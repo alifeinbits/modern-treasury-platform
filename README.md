@@ -43,7 +43,7 @@ Modern Treasury Platform is built using a microservices architecture, with the f
 
 ### Prerequisites
 
-- Java 11 or higher
+- Java 17 or higher
 - Maven 3.6 or higher
 - Docker (optional, for containerization)
 
@@ -92,13 +92,34 @@ To run the entire platform locally:
 - Event Service: Handles event logging and tracking
 - Balance Monitoring Service: Provides real-time balance tracking and alerts
 
+## API Documentation
+
+API documentation for each service is available via Swagger UI. When running a service locally, you can access its Swagger UI at:
+```
+http://localhost:8080/swagger-ui.html 
+```
+
+Replace `<port>` with the port number of the specific service.
+
+## Testing
+
+To run the tests for all services:
+```
+mvn test
+```
+To run tests for a specific service:
+```
+mvn test -pl <service-name>
+
+```
+
 ## Contributing
 
 We welcome contributions to the Modern Treasury Platform! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) file for details on how to get started.
 
 ## Roadmap
 
-For information about upcoming features and enhancements, please see our [GitHub Project Board](https://github.com/your-username/modern-treasury-platform/projects).
+For information about upcoming features and enhancements, please see our [GitHub Project Board](https://github.com/alifeinbits/modern-treasury-platform/projects).
 
 ## License
 
@@ -107,3 +128,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 ## Contact
 
 For any questions or concerns, please open an issue on this repository or contact our team at support@moderntreasury.com.
+
+## Deployment
+
+Detailed deployment instructions can be found in our [Deployment Guide](DEPLOYMENT.md).
