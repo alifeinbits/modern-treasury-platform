@@ -51,7 +51,7 @@ Modern Treasury Platform is built using a microservices architecture, with the f
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/modern-treasury-platform.git
+   git clone https://github.com/alifeinbits/modern-treasury-platform.git
    ```
 
 2. Navigate to the project directory:
